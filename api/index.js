@@ -1,6 +1,40 @@
 import { verifyKey } from 'discord-interactions';
 
-const PUBLIC_KEY = '8058f96d985e6c4c8f0c78010073b83146a49bff0d1e3858e28bfa817fccc8dd';
+const PUBLIC_KEY = '8058f96d985e6c4c8f0c78010073b83146a49bff0d1e3858e28bfa817fccc8dd'; // ta clé publique ici
+
+export default async function handler(req, res) {
+  if (req.method === 'POST') {
+    const signature = req.headers['x-signature-ed25519'];
+    const timestamp = req.headers['x-signature-timestamp'];
+    const rawBody = await getRawBody(req);
+
+    const isValidRequest = verifyKey(rawBody, signature, timestamp, PUBLIC_KEY);
+
+    if (!isValidRequest) {
+      return res.status(401).send('Bad request signature');
+    }
+
+    const { type } = JSON.parse(rawBody.toString('utf-8'));
+
+    // PING
+    if (type === 1) {
+      return res.status(200).json({ type: 1 });
+    }
+
+    // INTERACTION
+    return res.status(200).json({
+      type: 4,
+      data: { content: 'Interaction Discord reçue ! 🎉' },
+    });
+  }
+
+  // GET request test
+  if (req.method === 'GET') {
+    return res.status(200).send('API Discord est en ligne ✅');
+  }
+
+  return res.status(405).end();
+}
 
 export const config = {
   api: {
@@ -8,40 +42,4 @@ export const config = {
   },
 };
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
-
-  const signature = req.headers['x-signature-ed25519'];
-  const timestamp = req.headers['x-signature-timestamp'];
-  const rawBody = await getRawBody(req);
-
-  const isValid = verifyKey(rawBody, signature, timestamp, PUBLIC_KEY);
-  if (!isValid) {
-    return res.status(401).send('Invalid request signature');
-  }
-
-  const interaction = JSON.parse(rawBody);
-
-  // Ping check
-  if (interaction.type === 1) {
-    return res.status(200).json({ type: 1 });
-  }
-
-  // Basic reply
-  return res.status(200).json({
-    type: 4,
-    data: {
-      content: 'Interaction Discord reçue ! 🎉',
-    },
-  });
-}
-
-// Helper to get raw body
-async function getRawBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', chunk => (data += chunk));
-    req.on('end', () => resolve(data));
-    req.on('error', err => reject(err));
-  });
-}
+import getRawBody from 'raw-body';
